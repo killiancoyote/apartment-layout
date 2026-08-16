@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>3BR Layout</title>
+<style>
+:root{
+  --mat:#d9d9d2;
+  --mat-dk:#c6c6be;
+  --sheet:#fbfaf7;
+  --poche:#141412;
+  --ink:#26261f;
+  --graphite:#8d8d82;
+  --pen:#1b3ec9;
+  --red:#b3261e;
+  --service:#e8e7e0;
+  --grid:#c9c7bc;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:"Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:var(--mat);
+  color:var(--ink);
+  font-family:var(--sans);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+
+/* ---------- header ---------- */
+header{
+  padding:10px 14px 8px;
+  border-bottom:1px solid var(--mat-dk);
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  background:var(--mat);flex:none;
+}
+h1{
+  font-size:12px;font-weight:600;margin:0;
+  letter-spacing:.16em;text-transform:uppercase;
+}
+header .sub{
+  font-family:var(--mono);font-size:10px;color:var(--graphite);
+  letter-spacing:.04em;
+}
+
+/* ---------- plan viewport ---------- */
+#viewport{
+  flex:1;overflow:auto;position:relative;
+  background:var(--mat);
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-x pan-y;
+  overscroll-behavior:contain;
+}
+#stage{padding:18px;display:inline-block;min-width:100%}
+svg{display:block;touch-action:pan-x pan-y}
+
+.room-fill{fill:var(--sheet)}
+.room-service{fill:var(--service)}
+.chase{fill:var(--poche)}
+.gridline{stroke:var(--grid);stroke-width:.4;fill:none}
+.wall{fill:none;stroke:var(--poche);stroke-width:5.5;stroke-linejoin:miter}
+.door{stroke:var(--poche);stroke-width:1.4;fill:none}
+.doorarc{stroke:var(--poche);stroke-width:.8;fill:none;opacity:.8}
+.glass{stroke:var(--poche);stroke-width:1;fill:none}
+.fix{fill:var(--sheet);stroke:var(--poche);stroke-width:1.2}
+.fixthin{fill:none;stroke:var(--poche);stroke-width:.9}
+.rlabel{
+  font-family:var(--sans);font-size:9px;font-weight:600;
+  letter-spacing:.13em;text-transform:uppercase;
+  fill:var(--ink);text-anchor:middle;pointer-events:none;
+}
+.rdim{
+  font-family:var(--mono);font-size:9px;
+  fill:var(--graphite);text-anchor:middle;pointer-events:none;
+}
+.slabel{
+  font-family:var(--sans);font-size:7.5px;letter-spacing:.14em;
+  text-transform:uppercase;fill:var(--graphite);
+  text-anchor:middle;pointer-events:none;
+}
+.sdim{
+  font-family:var(--mono);font-size:6.5px;fill:var(--graphite);
+  text-anchor:middle;pointer-events:none;opacity:.8;
+}
+
+/* furniture */
+.piece{cursor:grab;touch-action:none}
+.piece.sel{cursor:grabbing}
+.piece rect.body{stroke:var(--poche);stroke-width:1.6;vector-effect:non-scaling-stroke}
+.piece.sel rect.body{stroke:var(--pen);stroke-width:3}
+.piece.clash rect.body{stroke:var(--red);stroke-width:3;stroke-dasharray:6 3}
+.piece text{
+  font-family:var(--mono);font-size:8px;fill:var(--ink);
+  text-anchor:middle;pointer-events:none;
+}
+.piece .nm{font-family:var(--sans);font-size:8px;font-weight:600;letter-spacing:.06em}
+
+/* the signature: dimension strings */
+.dimline{stroke:var(--pen);stroke-width:1.2;vector-effect:non-scaling-stroke}
+.dimtick{stroke:var(--pen);stroke-width:1.6;vector-effect:non-scaling-stroke}
+.dimtext{
+  font-family:var(--mono);font-size:9px;fill:var(--pen);
+  text-anchor:middle;font-weight:600;
+  paint-order:stroke;stroke:var(--sheet);stroke-width:3.5;stroke-linejoin:round;
+}
+.scaletext{font-family:var(--mono);font-size:9px;fill:var(--graphite)}
+
+/* ---------- controls ---------- */
+#bar{
+  border-top:1px solid var(--mat-dk);
+  background:var(--mat);
+  padding:8px 10px 10px;flex:none;
+}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+button{
+  font-family:var(--sans);font-size:11px;font-weight:600;
+  letter-spacing:.06em;
+  border:1px solid var(--poche);background:var(--sheet);color:var(--ink);
+  padding:7px 10px;border-radius:2px;cursor:pointer;
+  min-height:32px;
+}
+button:active{background:var(--poche);color:var(--sheet)}
+button:focus-visible{outline:2px solid var(--pen);outline-offset:2px}
+button.pen{border-color:var(--pen);color:var(--pen)}
+button.ghost{border-color:var(--mat-dk);color:var(--graphite);background:transparent}
+button.ghost.on{border-color:var(--poche);color:var(--ink);background:var(--sheet)}
+button[disabled]{opacity:.3;pointer-events:none}
+
+#readout{
+  font-family:var(--mono);font-size:10px;color:var(--graphite);
+  margin:7px 0 0;min-height:26px;line-height:1.4;
+}
+#readout b{color:var(--pen);font-weight:600}
+#readout b.warn{color:var(--red)}
+
+/* catalog */
+#cats{display:flex;gap:4px;overflow-x:auto;margin-top:9px;padding-bottom:3px}
+#cats button{
+  white-space:nowrap;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  padding:5px 8px;border-color:var(--mat-dk);color:var(--graphite);background:transparent;
+}
+#cats button.on{border-color:var(--poche);color:var(--ink);background:var(--sheet)}
+#items{
+  display:flex;gap:5px;overflow-x:auto;margin-top:6px;padding-bottom:4px;
+}
+#items button{
+  white-space:nowrap;display:flex;flex-direction:column;align-items:flex-start;
+  gap:2px;padding:6px 9px;font-size:10.5px;
+}
+#items button span{font-family:var(--mono);font-size:9px;color:var(--graphite);font-weight:400}
+/* custom pieces carry an edit affordance welded to the right of them */
+#items .pair{display:flex;gap:0;flex:none}
+#items .pair>button:first-child{border-right-width:0}
+#items .pair>button.ed{
+  padding:6px 8px;font-size:12px;align-self:stretch;color:var(--pen);
+  border-color:var(--poche);
+}
+#items .none{
+  font-family:var(--mono);font-size:10px;color:var(--graphite);
+  padding:8px 2px;
+}
+
+/* saved plans */
+#plist{list-style:none;margin:10px 0 0;padding:0;max-height:210px;overflow-y:auto}
+#plist li{border-top:1px solid var(--mat-dk);padding:8px 0;display:flex;
+  flex-direction:column;gap:5px}
+#plist .pn{font-size:12px;font-weight:600;word-break:break-word}
+#plist .pm{font-family:var(--mono);font-size:9px;color:var(--graphite)}
+#plist .pa{display:flex;gap:5px;flex-wrap:wrap}
+#plist button{padding:4px 8px;font-size:10px;min-height:26px}
+#plist li.on .pn{color:var(--pen)}
+#pempty{font-family:var(--mono);font-size:10px;color:var(--graphite);margin:12px 0 0}
+dialog .hint{font-family:var(--mono);font-size:9px;color:var(--graphite);margin:6px 0 0}
+
+dialog{
+  border:1px solid var(--poche);background:var(--sheet);padding:16px;
+  max-width:290px;width:88%;border-radius:2px;color:var(--ink);
+}
+dialog::backdrop{background:rgba(20,20,18,.5)}
+dialog h2{font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 12px}
+dialog label{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--graphite);margin:9px 0 3px}
+dialog input{
+  width:100%;font-family:var(--mono);font-size:16px;padding:7px;
+  border:1px solid var(--mat-dk);background:#fff;border-radius:2px;color:var(--ink);
+}
+dialog input:invalid{border-color:var(--red)}
+#err{color:var(--red);font-size:10px;font-family:var(--mono);min-height:12px;margin:8px 0 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>3BR · Layout</h1>
+  <span class="sub">to scale · 1&#8242; grid</span>
+  <span class="sub" id="planname"></span>
+</header>
+
+<div id="viewport"><div id="stage"><svg id="plan" role="img" aria-label="Scaled floor plan of the apartment"></svg></div></div>
+
+<div id="bar">
+  <div class="row">
+    <button id="rot" class="pen" disabled>Rotate 90°</button>
+    <button id="del" disabled>Remove</button>
+    <button id="undo" class="ghost" disabled>Undo</button>
+    <button class="ghost" id="zout" aria-label="Zoom out">−</button>
+    <button class="ghost" id="zin" aria-label="Zoom in">+</button>
+    <button class="ghost" id="zfit">Fit</button>
+    <button class="ghost on" id="gridbtn" aria-pressed="true">Grid</button>
+    <button class="ghost" id="custom">Custom…</button>
+    <button class="ghost" id="plans">Plans…</button>
+    <button class="ghost" id="clear">Clear all</button>
+  </div>
+  <p id="readout" aria-live="polite"></p>
+  <div id="cats" role="tablist" aria-label="Furniture categories"></div>
+  <div id="items" aria-label="Pieces"></div>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlgh">
+  <form method="dialog" id="cform">
+    <h2 id="dlgh">Add a custom piece</h2>
+    <label for="cn">Name</label>
+    <input id="cn" type="text" maxlength="40" placeholder="e.g. inherited dresser" required>
+    <label for="cw">Width (inches)</label>
+    <input id="cw" type="number" value="48" min="1" max="480" step="1" inputmode="numeric" required>
+    <label for="cd">Depth (inches)</label>
+    <input id="cd" type="number" value="20" min="1" max="480" step="1" inputmode="numeric" required>
+    <label for="ce">Pulls out (inches, optional)</label>
+    <input id="ce" type="number" value="" min="0" max="240" step="1" inputmode="numeric"
+           placeholder="0">
+    <p id="err"></p>
+    <p class="hint" id="chint">Saved to the Custom tab so you can reuse it.</p>
+    <div class="row" style="margin-top:10px;justify-content:flex-end">
+      <button class="ghost" id="cdel" type="button" style="margin-right:auto;display:none">Delete</button>
+      <button class="ghost" id="cx" type="button">Cancel</button>
+      <button class="pen" id="ca" type="submit">Add</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="pdlg" aria-labelledby="pdlgh">
+  <h2 id="pdlgh">Saved plans</h2>
+  <label for="pname">Name</label>
+  <input id="pname" type="text" maxlength="60" placeholder="e.g. crib in bedroom 3">
+  <div class="row" style="margin-top:10px">
+    <button class="pen" id="pnew" type="button">Save as new</button>
+    <button class="ghost" id="pupd" type="button" style="display:none">Update</button>
+  </div>
+  <p id="perr" style="color:var(--red);font-family:var(--mono);font-size:10px;min-height:12px;margin:8px 0 0"></p>
+  <ul id="plist"></ul>
+  <p id="pempty"></p>
+  <div class="row" style="margin-top:14px;justify-content:flex-end">
+    <button class="ghost" id="px" type="button">Close</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+/* ============================================================
+   GEOMETRY — all units in INCHES, origin at top-left of unit.
+   Rebuilt directly from the paper plan. Labeled dimensions are
+   taken as exact; interior walls are 5". Every column closes:
+
+     width : 133 + 159 + 131 + two walls            = 433
+     right : bed3 127 · kitchen 120 · bath 88 · primary 123 = 468
+     middle: living 290 · foyer 125 · closet 44     = 468
+     left  : bed2 248 · closet band 35 · bath 115   = 408 (SW notch)
+
+   Doors and windows are traced from the plan photo — positions
+   as drawn, widths standard (30–36" doors, bifolds on closets).
+   ============================================================ */
+const W = 433, H = 468;
+
+const ROOMS = [
+  { id:'bed2', name:'Bedroom 2',
+    poly:[[0,0],[133,0],[133,248],[0,248]],
+    fits:[[0,0,133,248]],
+    clear:"11'1\" × 20'8\"" },
+
+  { id:'living', name:'Living / Dining',
+    poly:[[138,0],[297,0],[297,290],[138,290]],
+    fits:[[138,0,297,290]],
+    clear:"13'3\" × 24'2\"" },
+
+  { id:'bed3', name:'Bedroom 3',
+    poly:[[302,0],[433,0],[433,127],[302,127]],
+    fits:[[302,0,433,127]],
+    clear:"10'11\" × 10'7\"" },
+
+  { id:'kitchen', name:'Kitchen',
+    poly:[[302,132],[433,132],[433,252],[302,252]],
+    fits:[[302,132,433,252]],
+    clear:"10'11\" × 10'" },
+
+  /* L-shaped: 7'7" leg running the full 14', plus the entry nook
+     under the mini-hall where the en-suite door sits, then the full
+     18'6" width below the bath. 433-211=222=18'6", 468-300=168=14'. */
+  { id:'primary', name:'Primary Bedroom',
+    poly:[[211,300],[337,300],[337,345],[433,345],[433,468],[211,468]],
+    fits:[[211,300,302,468],[211,345,433,468],[302,300,337,345]],
+    clear:"18'6\" × 14'" },
+
+  /* Steps around the hall closet at its upper-left; entry at the
+     bottom. Sheet dimension kept as the label. */
+  { id:'foyer', name:'Foyer',
+    poly:[[138,295],[211,295],[211,420],[107,420],[107,325],[138,325]],
+    fits:[[138,295,211,420],[107,325,211,420]],
+    clear:"10'4\" × 10'5\"" }
+];
+
+const SERVICE = [
+  /* Bedroom 2's own closet — bifold opening north into the room */
+  { poly:[[0,253],[57,253],[57,288],[0,288]],     label:'CL' },
+  /* the two stacked closets against the living wall, opening west
+     into the hallway */
+  { poly:[[107,253],[133,253],[133,288],[107,288]], label:'CL' },
+  { poly:[[107,293],[133,293],[133,320],[107,320]], label:'CL' },
+  /* hallway: bedroom door at top, bath door on its left, opens to
+     the foyer at bottom right */
+  { poly:[[67,253],[102,253],[102,353],[67,353]], label:'Hall', sub:"2'11\" wide" },
+  /* closet at the hall's foot, door swinging into the foyer */
+  { poly:[[67,353],[102,353],[102,408],[67,408]], label:'CL' },
+  { poly:[[0,293],[62,293],[62,408],[0,408]],     label:'Bath', sub:"5'2\" × 9'7\"" },
+  /* the primary's second closet — backs onto the foyer beside the
+     entry door, but opens EAST into the bedroom */
+  { poly:[[166,424],[211,424],[211,464],[166,464]], label:'CL' },
+  /* back-to-back closet block between bedroom 3 and the kitchen:
+     north half opens into the bedroom (just right of its door),
+     south half opens into the kitchen */
+  { poly:[[302,132],[340,132],[340,168],[302,168]], label:'CL', dy:-4 },
+  /* second bath — entered from inside the primary through its west wall */
+  { poly:[[337,257],[433,257],[433,345],[337,345]], label:'Bath' },
+  /* the mini-hall off the living's bottom-right: kitchen opens on its
+     left, it dead-ends at the bath's back wall, primary door on its
+     right (south) */
+  { poly:[[302,257],[337,257],[337,295],[302,295]], label:'' },
+  /* primary's double closet, doors swinging into the room */
+  { poly:[[211,300],[300,300],[300,330],[211,330]], label:'CL' }
+];
+
+/* ---- doors: punched gap + leaf + swing arc, traced from the plan.
+   hinge/r in inches; a0 = closed position, a1 = open leaf, degrees
+   with 0=east 90=south (screen coords). ---- */
+const DOORS = [
+  { gap:[67,243,32,15],  hinge:[99,248],  r:32, a0:180, a1:270 }, // bedroom 2
+  { gap:[58,296,13,32],  hinge:[62,298],  r:30, a0:90,  a1:180 }, // bath 1, off hall
+  { gap:[127,414,33,15], hinge:[160,420], r:33, a0:180, a1:270 }, // ENTRY — closet is east of it
+  { gap:[206,429,10,32], hinge:[211,461], r:32, a0:270, a1:0   }, // bottom closet → primary bedroom
+  { gap:[305,291,30,13], hinge:[335,300], r:30, a0:180, a1:90  }, // primary, off the mini-hall
+  { gap:[333,303,10,32], hinge:[337,305], r:30, a0:90,  a1:0   }, // en-suite bath, just inside primary
+  { gap:[293,86,13,32],  hinge:[302,86],  r:32, a0:90,  a1:0   }, // bedroom 3, straight off living
+  { gap:[306,122,30,15], hinge:[306,127], r:30, a0:0,   a1:270 }, // bed3 closet, right of its door
+  { gap:[306,163,30,10], hinge:[336,168], r:30, a0:180, a1:90  }  // kitchen closet, hinged clear of the entry
+];
+
+/* cased openings — no leaf */
+const CASED = [
+  [146,284,60,17],   // living ↔ foyer
+  [293,259,13,32],   // living ↔ mini-hall, bottom-right of living
+  [304,247,31,15],   // mini-hall ↔ kitchen — the no-door opening on the left
+  [98,327,13,24]     // hall ↔ foyer
+];
+
+/* bifold closet fronts: gap + fold line (drawn as a zigzag) */
+const BIFOLDS = [
+  { gap:[8,243,42,15],   line:[10,250,48,250]  },  // bed2 closet
+  { gap:[98,257,13,27],  line:[104,282,104,259]},  // hall closet upper
+  { gap:[98,296,13,21],  line:[104,315,104,298]},  // hall closet lower
+  { gap:[98,360,13,40],  line:[104,362,104,398]},  // hall-foot closet — folding front, not a full door
+  { gap:[216,323,79,14], line:[218,331,293,331]}   // primary closet — open across its full front
+];
+
+/* windows: gap in the outer wall + double glazing line.
+   a: axis, c: the wall's centerline. */
+/* NOTE: no windows on the primary's south wall — the sheet hatches it,
+   but they don't exist in the real apartment. */
+const WINDOWS = [
+  { g:[22,-4,36,8],   a:'h', c:0 },   // bed2 ×2
+  { g:[70,-4,38,8],   a:'h', c:0 },
+  { g:[156,-4,96,8],  a:'h', c:0 },   // living
+  { g:[320,-4,78,8],  a:'h', c:0 },   // bed3 top — stops at the big column
+  { g:[429,30,8,32],  a:'v', c:433 }, // bed3 right ×2, starting below it
+  { g:[429,68,8,34],  a:'v', c:433 },
+  { g:[429,164,8,44], a:'v', c:433 }, // kitchen — below the NE column
+  { g:[429,366,8,26], a:'v', c:433 }, // primary right ×2, starting below the corner column
+  { g:[429,400,8,26], a:'v', c:433 }
+];
+
+/* structural columns poking into the rooms — they matter for furniture,
+   so they're drawn as poché AND counted as obstacles. Sized off the
+   full plan photo rather than generic column dimensions. */
+const PILLARS = [
+  [0,0,18,18],      // bedroom 2 NW corner
+  [108,0,36,18],    // top wall, spanning the bed2/living junction
+  [273,0,24,20],    // living NE — flush against its east wall
+  [279,232,18,26],  // living SE — flush east, just above the mini-hall entry
+  [400,0,33,26],    // bedroom 3 NE — the big one
+  [419,109,14,20],  // bedroom 3 SE, below the windows
+  [419,132,14,26],  // kitchen NE, at the top of its east wall
+  [415,345,18,17],  // primary NE — flush in the corner under the bath wall
+  [219,452,26,16],  // primary SW, beside the bottom closet
+  [402,438,31,30]   // primary SE — the other big one
+];
+
+/* ============================================================
+   CATALOG — the actual inventory only, nothing generic.
+   Footprints in inches, [name, width, depth, extension?]
+   `extension` = how far the piece pulls out in front (trundle).
+
+   Measured 2026-08-16, except:
+     · Queen bed — Thuma Queen platform is 65 × 85 per Thuma's FAQ.
+     · Office chair — 26 × 26, typical task chair, confirmed as fine.
+   Not moving: the bar (71 × 12).
+   ============================================================ */
+const CATALOG = {
+  Living:[["Couch",86,36],["Coffee table",48,22],["TV console, dark",58,15],
+          ["Dining table",36,36],["Dining chair",21,17],["Bar stool",15,15],
+          ["Coffee station",32,14],["Liquor cabinet",36,19],["Wine fridge",10,20],
+          ["C's cupboard",55,16],["Entry table",29,10],["Mirror, leaning",32,5]],
+  Bedroom:[["Queen bed (Thuma)",65,85],["Side table",16,16],["A's dresser",54,15],
+           ["K's dresser",30,19],["Tall locker",15,12],["Standing desk",48,30],
+           ["Office chair",26,26],["TV console, light",60,16],["Bin storage",37,14],
+           ["A's bins",37,12]],
+  "C's room":[["Crib",54,30],["C's dresser",59,18],["Rocking chair",27,34],
+        ["Trundle couch",76,35,24]],
+  /* stays the category name 'Rugs' — FLAT keys off it so rugs never
+     collide with the furniture standing on them */
+  Rugs:[["Leopard rug",84,120],["Colorful rug",60,96],["Gray/blue rug",96,118]],
+  /* filled from localStorage at load; entries are
+     [name, w, d, ext, id] — the id lets an edit follow through to
+     copies already placed on the plan */
+  Custom:[]
+};
+const HUE = { Living:'#c9a795', Bedroom:'#a9b8a3', "C's room":'#c4b5c9',
+              Rugs:'#e6e2d7', Custom:'#b8b8ae' };
+const FLAT = new Set(['Rugs']);          // things you walk on — never "collide"
+const WALK = 30;                          // inches, minimum comfortable walkway
+const SNAP = 3;                           // drag grid, inches
+const MAGNET = 5;                         // snap flush to a wall within this
+
+/* ============================================================ */
+const NS='http://www.w3.org/2000/svg';
+const svg=document.getElementById('plan');
+const viewport=document.getElementById('viewport');
+const out=document.getElementById('readout');
+
+let zoom=1.55, pieces=[], sel=null, uid=1, showGrid=true;
+let history=[], drag=null, raf=0;
+
+/* ---------- helpers ---------- */
+const ft = n => {
+  const s = Math.round(n);
+  const sign = s<0 ? '−' : '';
+  const a = Math.abs(s), f = Math.floor(a/12), i = a%12;
+  if(!f) return sign + i + '"';
+  if(!i) return sign + f + "'";
+  return sign + f + "'-" + i + '"';
+};
+const el=(t,a={})=>{const n=document.createElementNS(NS,t);for(const k in a)n.setAttribute(k,a[k]);return n;};
+const pts=p=>p.map(q=>q.join(',')).join(' ');
+const clamp=(v,lo,hi)=>Math.min(Math.max(v,lo),hi);
+/* rot is 0-3, quarter turns clockwise. 0 = the piece's front faces
+   south; 1 west; 2 north; 3 east. Directional pieces (the trundle)
+   need all four, so a boolean wasn't enough. */
+const dims=p=>((p.rot|0)%2)?[p.d,p.w]:[p.w,p.d]; // single source of truth for orientation
+const box=p=>{const[w,d]=dims(p);return[p.x,p.y,p.x+w,p.y+d];};
+/* the floor a piece needs in front of it when opened out */
+function extBox(p){
+  if(!p.ext) return null;
+  const [w,d]=dims(p), e=p.ext;
+  switch(p.rot|0){
+    case 1:  return [p.x-e, p.y, p.x, p.y+d];
+    case 2:  return [p.x, p.y-e, p.x+w, p.y];
+    case 3:  return [p.x+w, p.y, p.x+w+e, p.y+d];
+    default: return [p.x, p.y+d, p.x+w, p.y+d+e];
+  }
+}
+const overlaps=(a,b)=>a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3];
+const inPoly=(px,py,poly)=>{
+  let hit=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const [xi,yi]=poly[i], [xj,yj]=poly[j];
+    if((yi>py)!==(yj>py) && px < (xj-xi)*(py-yi)/(yj-yi)+xi) hit=!hit;
+  }
+  return hit;
+};
+
+/* ---------- rendering ---------- */
+const PAD=26;
+let toFit=[];   // [textEl, maxWidth] measured after the tree is live
+
+function shrinkToFit(t,maxW){
+  let len=0;
+  try{ len=t.getComputedTextLength(); }catch(e){ return; }
+  if(len>maxW && maxW>0){
+    t.setAttribute('textLength',maxW);
+    t.setAttribute('lengthAdjust','spacingAndGlyphs');
+  }
+}
+
+/* bifold zigzag along a segment; folds bulge to the segment's right */
+function zig(g,x1,y1,x2,y2){
+  const n=4, dx=(x2-x1)/n, dy=(y2-y1)/n;
+  const len=Math.hypot(x2-x1,y2-y1)||1;
+  const px=-(y2-y1)/len*5, py=(x2-x1)/len*5;
+  let d=`M${x1},${y1}`;
+  for(let i=1;i<=n;i++){
+    d+=` L${(x1+dx*(i-.5)+px).toFixed(1)},${(y1+dy*(i-.5)+py).toFixed(1)}`+
+       ` L${x1+dx*i},${y1+dy*i}`;
+  }
+  g.appendChild(el('path',{class:'door',d}));
+}
+
+function rrTub(g,x,y,w,h){
+  g.appendChild(el('rect',{class:'fix',x,y,width:w,height:h,rx:3}));
+  g.appendChild(el('rect',{class:'fixthin',x:x+3,y:y+3,width:w-6,height:h-6,rx:6}));
+}
+
+function drawFixtures(g){
+  /* bath 1 — vanity on the west wall, toilet below, tub across the foot */
+  g.appendChild(el('ellipse',{class:'fix',cx:13,cy:318,rx:9,ry:12}));
+  g.appendChild(el('rect',{class:'fix',x:2,y:342,width:8,height:22,rx:1}));
+  g.appendChild(el('ellipse',{class:'fix',cx:21,cy:353,rx:10,ry:9}));
+  rrTub(g,4,374,54,31);
+  /* bath 2 — sink and toilet along the top, tub down the right wall */
+  g.appendChild(el('ellipse',{class:'fix',cx:355,cy:272,rx:10,ry:8}));
+  g.appendChild(el('rect',{class:'fix',x:372,y:259,width:24,height:8,rx:1}));
+  g.appendChild(el('ellipse',{class:'fix',cx:384,cy:277,rx:9,ry:8}));
+  rrTub(g,404,260,27,82);
+  /* kitchen — counter starts at the bath's back wall, sink, stove at top */
+  g.appendChild(el('rect',{class:'fixthin',x:337,y:228,width:96,height:24}));
+  g.appendChild(el('rect',{class:'fix',x:386,y:232,width:30,height:16,rx:2}));
+  g.appendChild(el('line',{class:'fixthin',x1:401,y1:232,x2:401,y2:248}));
+  g.appendChild(el('rect',{class:'fix',x:344,y:132,width:30,height:26,rx:1}));
+  [[351,139],[367,139],[351,151],[367,151]].forEach(c=>
+    g.appendChild(el('circle',{class:'fixthin',cx:c[0],cy:c[1],r:4})));
+  /* divider between the back-to-back bed3 / kitchen closets */
+  g.appendChild(el('line',{class:'fixthin',x1:304,y1:150,x2:338,y2:150}));
+}
+
+function draw(){
+  toFit=[];
+  const frag=document.createDocumentFragment();
+
+  svg.setAttribute('viewBox',`${-PAD} ${-PAD} ${W+PAD*2} ${H+PAD*2}`);
+  svg.setAttribute('width',(W+PAD*2)*zoom*0.9);
+  svg.setAttribute('height',(H+PAD*2)*zoom*0.9);
+
+  /* defs: 1-foot grid, clipped to the rooms so it reads as flooring */
+  const defs=el('defs');
+  const pat=el('pattern',{id:'ft-grid',width:12,height:12,patternUnits:'userSpaceOnUse'});
+  pat.appendChild(el('path',{d:'M12 0V12M0 12H12',class:'gridline'}));
+  defs.appendChild(pat);
+  const clip=el('clipPath',{id:'room-clip'});
+  ROOMS.forEach(r=>clip.appendChild(el('polygon',{points:pts(r.poly)})));
+  defs.appendChild(clip);
+  frag.appendChild(defs);
+
+  const gRoom=el('g'), gServ=el('g'), gWall=el('g'), gOp=el('g'), gTxt=el('g'),
+        gRug=el('g'), gPc=el('g'), gDim=el('g');
+
+  ROOMS.forEach(r=>gRoom.appendChild(el('polygon',{points:pts(r.poly),class:'room-fill'})));
+  SERVICE.forEach(s=>gServ.appendChild(
+    el('polygon',{points:pts(s.poly),class:s.chase?'chase':'room-service'})));
+
+  if(showGrid){
+    gServ.appendChild(el('rect',{x:0,y:0,width:W,height:H,
+      fill:'url(#ft-grid)','clip-path':'url(#room-clip)'}));
+  }
+
+  [...ROOMS.map(r=>r.poly),...SERVICE.map(s=>s.poly)]
+    .forEach(p=>gWall.appendChild(el('polygon',{points:pts(p),class:'wall'})));
+  /* the living/primary demising wall is 10" thick (both edges are true
+     inside faces), so the two edge strokes leave a sliver between them —
+     fill it so it reads as one wall. Punched openings still cut through. */
+  gWall.appendChild(el('rect',{x:207,y:292,width:132,height:6.5,fill:'var(--poche)'}));
+  PILLARS.forEach(p=>gWall.appendChild(
+    el('rect',{x:p[0],y:p[1],width:p[2],height:p[3],fill:'var(--poche)'})));
+
+  /* openings punched through the walls, then leaves, arcs, glazing */
+  const punch=(x,y,w,h)=>gOp.appendChild(el('rect',{x,y,width:w,height:h,fill:'var(--sheet)'}));
+  CASED.forEach(c=>punch(...c));
+  DOORS.forEach(d=>{
+    punch(...d.gap);
+    const P=a=>[d.hinge[0]+d.r*Math.cos(a*Math.PI/180),
+                d.hinge[1]+d.r*Math.sin(a*Math.PI/180)];
+    const [sx,sy]=P(d.a0), [ex,ey]=P(d.a1);
+    const sweep=((d.a1-d.a0+360)%360)<180?1:0;
+    gOp.appendChild(el('line',{class:'door',x1:d.hinge[0],y1:d.hinge[1],x2:ex,y2:ey}));
+    gOp.appendChild(el('path',{class:'doorarc',
+      d:`M${sx.toFixed(1)},${sy.toFixed(1)} A${d.r},${d.r} 0 0 ${sweep} ${ex.toFixed(1)},${ey.toFixed(1)}`}));
+  });
+  BIFOLDS.forEach(b=>{ punch(...b.gap); zig(gOp,...b.line); });
+  WINDOWS.forEach(w=>{
+    punch(...w.g);
+    const [x,y,ww,hh]=w.g;
+    [w.c-1.5,w.c+1.5].forEach(c=>gOp.appendChild(
+      w.a==='h' ? el('line',{class:'glass',x1:x+1,y1:c,x2:x+ww-1,y2:c})
+                : el('line',{class:'glass',x1:c,y1:y+1,x2:c,y2:y+hh-1})));
+  });
+  drawFixtures(gOp);
+
+  /* room labels — anchored in the largest fit rect, shrunk to stay inside it */
+  ROOMS.forEach(r=>{
+    const f=r.fits.reduce((a,b)=>((b[2]-b[0])*(b[3]-b[1])>(a[2]-a[0])*(a[3]-a[1])?b:a));
+    const cx=(f[0]+f[2])/2, cy=(f[1]+f[3])/2, maxW=(f[2]-f[0])-14;
+    const t1=el('text',{class:'rlabel',x:cx,y:cy-4}); t1.textContent=r.name.toUpperCase();
+    const t2=el('text',{class:'rdim',x:cx,y:cy+9}); t2.textContent=r.clear;
+    gTxt.appendChild(t1); gTxt.appendChild(t2);
+    toFit.push([t1,maxW],[t2,maxW]);
+  });
+
+  SERVICE.forEach(s=>{
+    if(!s.label) return;
+    const xs=s.poly.map(p=>p[0]), ys=s.poly.map(p=>p[1]);
+    const x1=Math.min(...xs), x2=Math.max(...xs);
+    const cx=(x1+x2)/2, cy=(Math.min(...ys)+Math.max(...ys))/2, maxW=(x2-x1)-8;
+    const t=el('text',{class:'slabel',x:cx,y:cy+(s.dy??(s.sub?0:3))}); t.textContent=s.label;
+    gTxt.appendChild(t); toFit.push([t,maxW]);
+    if(s.sub){
+      const u=el('text',{class:'sdim',x:cx,y:cy+9}); u.textContent=s.sub;
+      gTxt.appendChild(u); toFit.push([u,maxW]);
+    }
+  });
+
+  /* furniture — selected piece drawn last so it never hides under a neighbour */
+  const clashing=clashSet();
+  const order=[...pieces].sort((a,b)=>(a.id===sel?1:0)-(b.id===sel?1:0));
+  order.forEach(p=>{
+    const [w,d]=dims(p);
+    const cls='piece'+(sel===p.id?' sel':'')+(clashing.has(p.id)?' clash':'');
+    const g=el('g',{class:cls,'data-id':p.id});
+    const eb=extBox(p);
+    if(eb) g.appendChild(el('rect',{x:eb[0],y:eb[1],width:eb[2]-eb[0],height:eb[3]-eb[1],
+      fill:HUE[p.cat]||'#b8b8ae','fill-opacity':.22,stroke:'var(--poche)',
+      'stroke-width':1,'stroke-dasharray':'4 3','vector-effect':'non-scaling-stroke'}));
+    const rect=el('rect',{class:'body',x:p.x,y:p.y,width:w,height:d,
+      fill:HUE[p.cat]||'#b8b8ae','fill-opacity':FLAT.has(p.cat)?.85:.92,rx:1});
+    if(FLAT.has(p.cat)) rect.setAttribute('stroke-dasharray','5 3');
+    g.appendChild(rect);
+    if(w>44&&d>16){
+      const a=el('text',{class:'nm',x:p.x+w/2,y:p.y+d/2-1}); a.textContent=p.name;
+      const b=el('text',{x:p.x+w/2,y:p.y+d/2+10}); b.textContent=ft(w)+' × '+ft(d);
+      g.appendChild(a); g.appendChild(b);
+      toFit.push([a,w-6],[b,w-6]);
+    } else if(w>26&&d>10){
+      const a=el('text',{class:'nm',x:p.x+w/2,y:p.y+d/2+3}); a.textContent=p.name;
+      g.appendChild(a); toFit.push([a,w-4]);
+    }
+    (FLAT.has(p.cat)?gRug:gPc).appendChild(g);
+  });
+
+  frag.appendChild(gRoom); frag.appendChild(gServ); frag.appendChild(gWall);
+  frag.appendChild(gOp); frag.appendChild(gTxt);
+  frag.appendChild(gRug); frag.appendChild(gPc); frag.appendChild(gDim);
+  frag.appendChild(scalebar());
+
+  svg.replaceChildren(frag);
+  if(sel!=null) dimension(gDim);
+  toFit.forEach(([t,m])=>shrinkToFit(t,m));
+}
+
+/* redraw at most once a frame */
+function drawSoon(){
+  if(raf) return;
+  raf=requestAnimationFrame(()=>{ raf=0; draw(); });
+}
+
+/* ---------- signature: architectural dimension strings ---------- */
+function dimension(g){
+  const p=pieces.find(q=>q.id===sel); if(!p) return;
+  const [w,d]=dims(p);
+  const host=hostRoom(p); if(!host) return;
+  const [rx1,ry1,rx2,ry2]=host.fit;
+  const my=p.y+d/2, mx=p.x+w/2;
+
+  const tick=(x,y,horiz)=>{
+    const L=4;
+    g.appendChild(el('line',{class:'dimtick',
+      x1:x-(horiz?L*0.6:L), y1:y-(horiz?L:L*0.6),
+      x2:x+(horiz?L*0.6:L), y2:y+(horiz?L:L*0.6)}));
+  };
+  const run=(x1,y1,x2,y2,horiz)=>{
+    const len=horiz?Math.abs(x2-x1):Math.abs(y2-y1);
+    if(len<7) return;
+    g.appendChild(el('line',{class:'dimline',x1,y1,x2,y2}));
+    tick(x1,y1,horiz); tick(x2,y2,horiz);
+    const t=el('text',{class:'dimtext'});
+    if(horiz){
+      t.setAttribute('x',(x1+x2)/2); t.setAttribute('y',y1-5);
+    }else{
+      const cy=(y1+y2)/2;
+      t.setAttribute('x',x1); t.setAttribute('y',cy-5);
+      t.setAttribute('transform',`rotate(-90 ${x1} ${cy})`);
+    }
+    t.textContent=ft(len);
+    g.appendChild(t);
+  };
+  run(rx1,my,p.x,my,true);
+  run(p.x+w,my,rx2,my,true);
+  run(mx,ry1,mx,p.y,false);
+  run(mx,p.y+d,mx,ry2,false);
+}
+
+/* which room is a piece in, and which rectangle of it */
+function hostRoom(p){
+  const [w,d]=dims(p), cx=p.x+w/2, cy=p.y+d/2;
+  for(const r of ROOMS){
+    if(!inPoly(cx,cy,r.poly)) continue;
+    const fit=r.fits.find(f=>cx>=f[0]&&cx<=f[2]&&cy>=f[1]&&cy<=f[3]) || r.fits[0];
+    return {room:r,fit,inside:true};
+  }
+  let best=null,bd=Infinity;
+  for(const r of ROOMS) for(const f of r.fits){
+    const dx=Math.max(f[0]-cx,0,cx-f[2]), dy=Math.max(f[1]-cy,0,cy-f[3]);
+    const dd=dx*dx+dy*dy;
+    if(dd<bd){bd=dd;best={room:r,fit:f,inside:false};}
+  }
+  return best;
+}
+
+/* closets, baths, counters and the chase all count as solid */
+const OBSTACLES = SERVICE.map(s=>{
+  const xs=s.poly.map(p=>p[0]), ys=s.poly.map(p=>p[1]);
+  return {label:s.label||'wall',
+          box:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]};
+}).concat([
+  {label:'kitchen counter', box:[337,228,433,252]},
+  {label:'stove',           box:[344,132,374,158]}
+]).concat(PILLARS.map(p=>(
+  {label:'column', box:[p[0],p[1],p[0]+p[2],p[1]+p[3]]}
+)));
+const blockedBy = p => FLAT.has(p.cat) ? []
+  : OBSTACLES.filter(o=>overlaps(box(p),o.box)).map(o=>o.label);
+
+/* pieces that physically intersect another piece or an obstacle */
+function clashSet(){
+  const bad=new Set();
+  const solid=pieces.filter(p=>!FLAT.has(p.cat));
+  for(let i=0;i<solid.length;i++){
+    if(blockedBy(solid[i]).length) bad.add(solid[i].id);
+    for(let j=i+1;j<solid.length;j++)
+      if(overlaps(box(solid[i]),box(solid[j]))){ bad.add(solid[i].id); bad.add(solid[j].id); }
+  }
+  return bad;
+}
+
+function scalebar(){
+  const g=el('g'), y=H+14;
+  g.appendChild(el('line',{x1:0,y1:y,x2:60,y2:y,stroke:'#141412','stroke-width':2}));
+  [0,12,24,36,48,60].forEach(x=>g.appendChild(
+    el('line',{x1:x,y1:y-3,x2:x,y2:y+3,stroke:'#141412','stroke-width':1.4})));
+  const t=el('text',{x:68,y:y+3.5,class:'scaletext'});
+  t.textContent='0 — 5 feet · squares are 1 ft';
+  g.appendChild(t);
+  return g;
+}
+
+/* ---------- placement rules ---------- */
+function clampPiece(p){
+  const [w,d]=dims(p);
+  p.x=clamp(p.x,0,Math.max(0,W-w));
+  p.y=clamp(p.y,0,Math.max(0,H-d));
+}
+
+/* pull flush to a wall of the host rectangle when you get close */
+function magnet(p){
+  const [w,d]=dims(p), host=hostRoom(p);
+  if(!host) return;
+  const [x1,y1,x2,y2]=host.fit;
+  if(Math.abs(p.x-x1)<=MAGNET) p.x=x1;
+  else if(Math.abs(p.x+w-x2)<=MAGNET) p.x=x2-w;
+  if(Math.abs(p.y-y1)<=MAGNET) p.y=y1;
+  else if(Math.abs(p.y+d-y2)<=MAGNET) p.y=y2-d;
+}
+
+/* first clear spot in a room, searched outward from its centre */
+function findSpot(w,d,fit){
+  const [x1,y1,x2,y2]=fit, cx=(x1+x2)/2, cy=(y1+y2)/2;
+  const solids=pieces.filter(p=>!FLAT.has(p.cat)).map(box)
+    .concat(OBSTACLES.map(o=>o.box));
+  const cands=[];
+  for(let y=y1;y+d<=y2;y+=6) for(let x=x1;x+w<=x2;x+=6) cands.push([x,y]);
+  cands.sort((a,b)=>((a[0]+w/2-cx)**2+(a[1]+d/2-cy)**2)-((b[0]+w/2-cx)**2+(b[1]+d/2-cy)**2));
+  for(const [x,y] of cands)
+    if(!solids.some(s=>overlaps([x,y,x+w,y+d],s))) return [Math.round(x),Math.round(y)];
+  return null;
+}
+
+/* ---------- readout (text nodes only — names are user input) ---------- */
+const bold=(txt,warn)=>{const e=document.createElement('b');e.textContent=txt;if(warn)e.className='warn';return e;};
+
+function report(){
+  document.getElementById('rot').disabled = sel==null;
+  document.getElementById('del').disabled = sel==null;
+  document.getElementById('undo').disabled = history.length===0;
+
+  if(sel==null){
+    out.replaceChildren(document.createTextNode(
+      'Tap a piece below to drop it in. Tap a placed piece to see its clearances. Drag to move, R to rotate.'));
+    return;
+  }
+  const p=pieces.find(q=>q.id===sel);
+  if(!p){ sel=null; report(); return; }
+
+  const [w,d]=dims(p);
+  const host=hostRoom(p);
+  const [x1,y1,x2,y2]=host.fit;
+  const L=p.x-x1, R=x2-(p.x+w), T=p.y-y1, B=y2-(p.y+d);
+  const tight=Math.min(L,R,T,B);
+
+  const bits=[bold(p.name), document.createTextNode(
+    ` ${ft(w)} × ${ft(d)} in ${host.room.name} · L ${ft(L)} · R ${ft(R)} · top ${ft(T)} · bottom ${ft(B)}`)];
+
+  const hits=pieces.filter(q=>q.id!==p.id&&!FLAT.has(q.cat)&&!FLAT.has(p.cat)&&overlaps(box(p),box(q)))
+    .map(q=>q.name).concat(blockedBy(p));
+  if(hits.length){
+    bits.push(document.createTextNode(' — '));
+    bits.push(bold('overlaps '+hits.join(', '),true));
+  } else if(!host.inside){
+    bits.push(document.createTextNode(' — '));
+    bits.push(bold('not inside a room',true));
+  } else if(tight<0){
+    bits.push(document.createTextNode(' — '));
+    bits.push(bold('crosses the wall',true));
+  } else if(tight<WALK){
+    bits.push(document.createTextNode(' — '));
+    bits.push(bold(`${ft(tight)} gap, tight walkway`));
+  }
+
+  /* does it have room to open out? */
+  const eb=extBox(p);
+  if(eb){
+    const fouled=pieces.filter(q=>q.id!==p.id&&!FLAT.has(q.cat)&&overlaps(eb,box(q))).map(q=>q.name)
+      .concat(OBSTACLES.filter(o=>overlaps(eb,o.box)).map(o=>o.label));
+    const past=eb[0]<x1-1||eb[1]<y1-1||eb[2]>x2+1||eb[3]>y2+1;
+    bits.push(document.createTextNode(` · needs ${ft(p.ext)} to open`));
+    if(fouled.length) bits.push(document.createTextNode(', blocked by '), bold(fouled.join(', '),true));
+    else if(past) bits.push(document.createTextNode(', '), bold('opens past the wall',true));
+    else bits.push(document.createTextNode(' — clear'));
+  }
+  out.replaceChildren(...bits);
+}
+function refresh(){ draw(); report(); }
+
+/* ---------- history ---------- */
+function snapshot(){
+  history.push(JSON.stringify({pieces,uid,sel}));
+  if(history.length>60) history.shift();
+}
+function undo(){
+  const s=history.pop(); if(!s) return;
+  const j=JSON.parse(s);
+  pieces=j.pieces; uid=j.uid; sel=j.sel;
+  refresh(); save();
+}
+
+/* ---------- interaction ---------- */
+function toSvg(e){
+  const pt=svg.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY;
+  const m=svg.getScreenCTM();
+  return m ? pt.matrixTransform(m.inverse()) : {x:0,y:0};
+}
+
+/* Deselect lives on the viewport, not the svg: the grey mat around the
+   plan is outside the svg box, so a click there used to leave the piece
+   selected with its dimension strings still up. */
+viewport.addEventListener('pointerdown',e=>{
+  if(e.target.closest?.('.piece')) return;   // piece pickup is handled below
+  if(sel!=null){ sel=null; refresh(); }
+});
+
+svg.addEventListener('pointerdown',e=>{
+  const g=e.target.closest?e.target.closest('.piece'):null;
+  if(!g) return;
+  const id=+g.dataset.id, p=pieces.find(q=>q.id===id);
+  if(!p) return;
+  sel=id;
+  snapshot();
+  const s=toSvg(e);
+  drag={dx:s.x-p.x, dy:s.y-p.y, p, moved:false};
+  try{ svg.setPointerCapture(e.pointerId); }catch(err){}
+  refresh();
+  e.preventDefault();
+});
+
+svg.addEventListener('pointermove',e=>{
+  if(!drag) return;
+  const s=toSvg(e);
+  drag.p.x=Math.round((s.x-drag.dx)/SNAP)*SNAP;
+  drag.p.y=Math.round((s.y-drag.dy)/SNAP)*SNAP;
+  clampPiece(drag.p);
+  drag.moved=true;
+  drawSoon(); report();
+  e.preventDefault();
+},{passive:false});
+
+const endDrag=()=>{
+  if(!drag) return;
+  if(drag.moved){ magnet(drag.p); clampPiece(drag.p); refresh(); save(); }
+  else history.pop();          // a tap that only selected shouldn't cost an undo
+  drag=null;
+  report();
+};
+svg.addEventListener('pointerup',endDrag);
+svg.addEventListener('pointercancel',endDrag);
+
+/* rotate about the centre, not the top-left corner */
+function rotate(p){
+  const [w0,d0]=dims(p);
+  const cx=p.x+w0/2, cy=p.y+d0/2;
+  p.rot=((p.rot|0)+1)%4;
+  const [w1,d1]=dims(p);
+  /* no rounding — on an odd w-d gap it would drift a little each turn */
+  p.x=cx-w1/2;
+  p.y=cy-d1/2;
+  clampPiece(p);
+}
+
+const dlg=document.getElementById('dlg');
+const typing=t=>t && (t.matches?.('input,textarea,select') || t.isContentEditable);
+
+document.addEventListener('keydown',e=>{
+  // don't drive the plan while a dialog is up or a field has focus
+  if(document.querySelector('dialog[open]') || typing(e.target)) return;
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); return; }
+  if(sel==null) return;
+  const p=pieces.find(q=>q.id===sel);
+  if(!p){ sel=null; refresh(); return; }
+
+  if(e.key==='r'||e.key==='R'){ snapshot(); rotate(p); refresh(); save(); e.preventDefault(); return; }
+  if(e.key==='Backspace'||e.key==='Delete'){
+    snapshot(); pieces=pieces.filter(q=>q.id!==sel); sel=null; refresh(); save(); e.preventDefault(); return;
+  }
+  if(e.key==='Escape'){ sel=null; refresh(); return; }
+  const k={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+  if(k){
+    snapshot();
+    const step=e.shiftKey?12:1;
+    p.x+=k[0]*step; p.y+=k[1]*step;
+    clampPiece(p); refresh(); save(); e.preventDefault();
+  }
+});
+
+function add(name,w,d,cat,ext,src){
+  snapshot();
+  const target=ROOMS.find(r=>r.id==='living');
+  const fit=target.fits[0];
+  const spot=findSpot(w,d,fit) ||
+    [clamp(Math.round((fit[0]+fit[2])/2-w/2)+((pieces.length%5)*9),0,W-w),
+     clamp(Math.round((fit[1]+fit[3])/2-d/2)+((pieces.length%5)*9),0,H-d)];
+  const p={id:uid++,name,w,d,cat,rot:0,x:spot[0],y:spot[1]};
+  if(ext) p.ext=ext;
+  if(src) p.src=src;
+  clampPiece(p);
+  pieces.push(p);
+  sel=p.id;
+  refresh(); save();
+}
+
+/* ---------- catalog UI ---------- */
+const cats=document.getElementById('cats'), items=document.getElementById('items');
+let curCat='Living';
+Object.keys(CATALOG).forEach(k=>{
+  const b=document.createElement('button');
+  b.type='button'; b.textContent=k; b.setAttribute('role','tab');
+  b.onclick=()=>{curCat=k;paint();};
+  cats.appendChild(b);
+});
+function paint(){
+  [...cats.children].forEach(b=>{
+    const on=b.textContent===curCat;
+    b.classList.toggle('on',on);
+    b.setAttribute('aria-selected',on?'true':'false');
+  });
+  const frag=document.createDocumentFragment();
+  const list=CATALOG[curCat];
+  if(curCat==='Custom' && !list.length){
+    const p=document.createElement('p'); p.className='none';
+    p.textContent='No custom pieces yet — add one with “Custom…”.';
+    frag.appendChild(p);
+  }
+  list.forEach(([n,w,d,ext,cid],i)=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.append(document.createTextNode(n));
+    const s=document.createElement('span');
+    s.textContent=`${ft(w)} × ${ft(d)}`+(ext?` (+${ft(ext)})`:'');
+    b.appendChild(s);
+    b.onclick=()=>add(n,w,d,curCat,ext,cid);
+    if(curCat==='Custom'){
+      const pair=document.createElement('div'); pair.className='pair';
+      const e=document.createElement('button');
+      e.type='button'; e.className='ed'; e.textContent='✎';
+      e.setAttribute('aria-label','Edit '+n);
+      e.onclick=()=>openCustom(i);
+      pair.append(b,e); frag.appendChild(pair);
+    } else frag.appendChild(b);
+  });
+  items.replaceChildren(frag);
+}
+
+/* ---------- zoom, keeping the middle of the view put ---------- */
+function setZoom(next){
+  const old=zoom;
+  zoom=clamp(next,0.5,4);
+  if(zoom===old) return;
+  const k=zoom/old;
+  const cx=viewport.scrollLeft+viewport.clientWidth/2;
+  const cy=viewport.scrollTop+viewport.clientHeight/2;
+  draw();
+  viewport.scrollLeft=cx*k-viewport.clientWidth/2;
+  viewport.scrollTop=cy*k-viewport.clientHeight/2;
+  save();
+}
+function fitToScreen(){
+  const avail=viewport.clientWidth-36;
+  setZoom(avail/((W+PAD*2)*0.9));
+}
+
+/* ---------- buttons ---------- */
+document.getElementById('rot').onclick=()=>{
+  const p=pieces.find(q=>q.id===sel); if(!p) return;
+  snapshot(); rotate(p); refresh(); save();
+};
+document.getElementById('del').onclick=()=>{
+  if(sel==null) return;
+  snapshot(); pieces=pieces.filter(q=>q.id!==sel); sel=null; refresh(); save();
+};
+document.getElementById('undo').onclick=undo;
+document.getElementById('zin').onclick=()=>setZoom(zoom*1.25);
+document.getElementById('zout').onclick=()=>setZoom(zoom/1.25);
+document.getElementById('zfit').onclick=fitToScreen;
+document.getElementById('gridbtn').onclick=e=>{
+  showGrid=!showGrid;
+  e.currentTarget.classList.toggle('on',showGrid);
+  e.currentTarget.setAttribute('aria-pressed',String(showGrid));
+  draw(); save();
+};
+document.getElementById('clear').onclick=()=>{
+  if(!pieces.length) return;
+  if(!confirm(`Remove all ${pieces.length} pieces from the plan?`)) return;
+  snapshot(); pieces=[]; sel=null; refresh(); save();
+};
+
+/* ---------- custom pieces: their own reusable category ---------- */
+const CUSTOM_KEY='layout-custom-v1';
+let editIdx=-1;                       // -1 = adding, otherwise index in CATALOG.Custom
+
+function saveCustom(){
+  try{ localStorage.setItem(CUSTOM_KEY,JSON.stringify(CATALOG.Custom)); }catch(err){}
+}
+function loadCustom(){
+  try{
+    const j=JSON.parse(localStorage.getItem(CUSTOM_KEY)||'null');
+    if(Array.isArray(j)) CATALOG.Custom=j.filter(r=>Array.isArray(r)&&r[1]>0&&r[2]>0);
+  }catch(err){}
+}
+
+function openCustom(idx){
+  editIdx = idx==null ? -1 : idx;
+  const err=document.getElementById('err');
+  err.textContent='';
+  document.getElementById('cform').reset();
+  const adding = editIdx<0;
+  document.getElementById('dlgh').textContent = adding?'Add a custom piece':'Edit custom piece';
+  document.getElementById('ca').textContent   = adding?'Add':'Save';
+  document.getElementById('cdel').style.display = adding?'none':'';
+  document.getElementById('chint').textContent = adding
+    ? 'Saved to the Custom tab so you can reuse it.'
+    : 'Changes also update copies already on the plan.';
+  if(!adding){
+    const [n,w,d,ext]=CATALOG.Custom[editIdx];
+    document.getElementById('cn').value=n;
+    document.getElementById('cw').value=w;
+    document.getElementById('cd').value=d;
+    document.getElementById('ce').value=ext||'';
+  }
+  dlg.showModal();
+}
+
+document.getElementById('custom').onclick=()=>openCustom();
+document.getElementById('cx').onclick=()=>dlg.close();
+
+document.getElementById('cdel').onclick=()=>{
+  if(editIdx<0) return;
+  const [n]=CATALOG.Custom[editIdx];
+  if(!confirm(`Delete “${n}” from the Custom tab? Copies already on the plan stay put.`)) return;
+  CATALOG.Custom.splice(editIdx,1);
+  saveCustom(); editIdx=-1; paint(); dlg.close();
+};
+
+document.getElementById('cform').addEventListener('submit',e=>{
+  const name=document.getElementById('cn').value.trim();
+  const w=Math.round(+document.getElementById('cw').value);
+  const d=Math.round(+document.getElementById('cd').value);
+  const raw=document.getElementById('ce').value.trim();
+  const ext=raw===''?0:Math.round(+raw);
+  const err=document.getElementById('err');
+  if(!name || !Number.isFinite(w) || !Number.isFinite(d) || w<1 || d<1 || w>480 || d>480){
+    e.preventDefault();
+    err.textContent='Need a name and sizes between 1 and 480 inches.';
+    return;
+  }
+  if(!Number.isFinite(ext) || ext<0 || ext>240){
+    e.preventDefault();
+    err.textContent='Pull-out must be between 0 and 240 inches.';
+    return;
+  }
+  if(editIdx<0){
+    const cid='c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    CATALOG.Custom.push([name,w,d,ext||undefined,cid]);
+    saveCustom(); paint();
+    add(name,w,d,'Custom',ext||undefined,cid);
+  }else{
+    const cid=CATALOG.Custom[editIdx][4];
+    CATALOG.Custom[editIdx]=[name,w,d,ext||undefined,cid];
+    saveCustom();
+    /* carry the edit through to copies already placed */
+    let touched=false;
+    pieces.forEach(p=>{
+      if(p.src&&p.src===cid){
+        p.name=name; p.w=w; p.d=d;
+        if(ext) p.ext=ext; else delete p.ext;
+        clampPiece(p); touched=true;
+      }
+    });
+    editIdx=-1; paint();
+    if(touched){ refresh(); save(); }
+  }
+  // dialog closes itself via method="dialog"
+});
+
+/* ---------- saved plans ---------- */
+const PLANS_KEY='layout-plans-v1';
+const pdlg=document.getElementById('pdlg');
+let plans=[], currentPlan=null;
+
+function savePlans(){
+  try{ localStorage.setItem(PLANS_KEY,JSON.stringify(plans)); }
+  catch(err){ document.getElementById('perr').textContent='Could not save — '+err.name; }
+}
+function loadPlans(){
+  try{
+    const j=JSON.parse(localStorage.getItem(PLANS_KEY)||'null');
+    if(Array.isArray(j)) plans=j.filter(p=>p&&p.id&&Array.isArray(p.pieces));
+  }catch(err){}
+}
+function planLabel(){
+  const el2=document.getElementById('planname');
+  const p=plans.find(q=>q.id===currentPlan);
+  el2.textContent = p ? '· '+p.name : '· unsaved';
+}
+const when=ts=>{
+  if(!ts) return '';
+  const d=new Date(ts);
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+
+         d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+};
+
+function renderPlans(){
+  const ul=document.getElementById('plist');
+  const empty=document.getElementById('pempty');
+  ul.replaceChildren();
+  empty.textContent = plans.length ? '' : 'No saved plans yet.';
+  document.getElementById('pupd').style.display =
+    plans.some(p=>p.id===currentPlan) ? '' : 'none';
+
+  plans.slice().sort((a,b)=>(b.at||0)-(a.at||0)).forEach(p=>{
+    const li=document.createElement('li');
+    if(p.id===currentPlan) li.className='on';
+    const nm=document.createElement('div'); nm.className='pn';
+    nm.textContent=p.name+(p.id===currentPlan?'  (open)':'');
+    const me=document.createElement('div'); me.className='pm';
+    me.textContent=`${p.pieces.length} piece${p.pieces.length===1?'':'s'} · ${when(p.at)}`;
+    const row=document.createElement('div'); row.className='pa';
+
+    const mk=(txt,fn,cls)=>{
+      const b=document.createElement('button');
+      b.type='button'; b.textContent=txt; if(cls) b.className=cls; b.onclick=fn;
+      return b;
+    };
+    row.append(
+      mk('Open',()=>openPlan(p.id),'pen'),
+      mk('Rename',()=>{
+        const n=prompt('Rename plan',p.name);
+        if(n===null) return;
+        const t=n.trim(); if(!t) return;
+        p.name=t.slice(0,60); savePlans(); renderPlans(); planLabel();
+      }),
+      mk('Duplicate',()=>{
+        plans.push({id:'p'+Date.now().toString(36),name:(p.name+' copy').slice(0,60),
+                    pieces:JSON.parse(JSON.stringify(p.pieces)),uid:p.uid,at:Date.now()});
+        savePlans(); renderPlans();
+      }),
+      mk('Delete',()=>{
+        if(!confirm(`Delete the plan “${p.name}”?`)) return;
+        plans=plans.filter(q=>q.id!==p.id);
+        if(currentPlan===p.id) currentPlan=null;
+        savePlans(); renderPlans(); planLabel();
+      })
+    );
+    li.append(nm,me,row);
+    ul.appendChild(li);
+  });
+}
+
+function openPlan(id){
+  const p=plans.find(q=>q.id===id); if(!p) return;
+  if(pieces.length && !plans.some(q=>q.id===currentPlan) &&
+     !confirm('The current layout is not saved to a plan. Open anyway?')) return;
+  snapshot();
+  pieces=JSON.parse(JSON.stringify(p.pieces));
+  pieces.forEach(q=>{ q.rot=(q.rot===true?1:(+q.rot||0))%4; });
+  pieces.forEach(clampPiece);
+  uid=Math.max(1,...pieces.map(q=>(+q.id||0)+1));
+  currentPlan=id; sel=null;
+  refresh(); save(); planLabel(); renderPlans();
+}
+
+document.getElementById('plans').onclick=()=>{
+  document.getElementById('perr').textContent='';
+  const p=plans.find(q=>q.id===currentPlan);
+  document.getElementById('pname').value=p?p.name:'';
+  renderPlans();
+  pdlg.showModal();
+};
+document.getElementById('px').onclick=()=>pdlg.close();
+
+document.getElementById('pnew').onclick=()=>{
+  const name=document.getElementById('pname').value.trim();
+  const err=document.getElementById('perr');
+  if(!name){ err.textContent='Give the plan a name first.'; return; }
+  if(!pieces.length){ err.textContent='Nothing on the plan to save.'; return; }
+  const id='p'+Date.now().toString(36);
+  plans.push({id,name:name.slice(0,60),
+              pieces:JSON.parse(JSON.stringify(pieces)),uid,at:Date.now()});
+  currentPlan=id; err.textContent='';
+  savePlans(); renderPlans(); planLabel();
+};
+
+document.getElementById('pupd').onclick=()=>{
+  const p=plans.find(q=>q.id===currentPlan);
+  const err=document.getElementById('perr');
+  if(!p){ err.textContent='No plan open to update.'; return; }
+  const name=document.getElementById('pname').value.trim();
+  if(name) p.name=name.slice(0,60);
+  p.pieces=JSON.parse(JSON.stringify(pieces));
+  p.uid=uid; p.at=Date.now();
+  err.textContent='';
+  savePlans(); renderPlans(); planLabel();
+};
+
+/* ---------- persistence ---------- */
+const KEY='layout-state-v3';
+let saveTimer=0;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    try{
+      localStorage.setItem(KEY,JSON.stringify({v:3,pieces,uid,zoom,showGrid,currentPlan}));
+    }catch(err){
+      out.replaceChildren(bold('Layout could not be saved — '+err.name,true));
+    }
+  },200);
+}
+function load(){
+  let j=null;
+  try{ j=JSON.parse(localStorage.getItem(KEY)||'null'); }catch(err){}
+  if(j && Array.isArray(j.pieces)){
+    pieces=j.pieces.filter(p=>p&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&p.w>0&&p.d>0);
+    /* rot used to be a boolean; quarter turns now */
+    pieces.forEach(p=>{ p.rot = (p.rot===true?1:(+p.rot||0))%4; });
+    pieces.forEach(clampPiece);
+    uid=Math.max(1,...pieces.map(p=>(+p.id||0)+1));
+    if(Number.isFinite(j.zoom)) zoom=clamp(j.zoom,0.5,4);
+    if(typeof j.showGrid==='boolean') showGrid=j.showGrid;
+    if(j.currentPlan) currentPlan=j.currentPlan;
+  }
+  const gb=document.getElementById('gridbtn');
+  gb.classList.toggle('on',showGrid);
+  gb.setAttribute('aria-pressed',String(showGrid));
+}
+
+loadCustom();
+loadPlans();
+load();
+planLabel();
+paint();
+refresh();
+viewport.scrollTop=0;
+</script>
+</body>
+</html>
