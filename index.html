@@ -248,6 +248,7 @@ dialog input:invalid{border-color:var(--red)}
   <div class="row" style="margin-top:10px">
     <button class="pen" id="pnew" type="button">Save as new</button>
     <button class="ghost" id="pupd" type="button" style="display:none">Update</button>
+    <button class="ghost" id="pseed" type="button">Restore starter</button>
   </div>
   <p id="perr" style="color:var(--red);font-family:var(--mono);font-size:10px;min-height:12px;margin:8px 0 0"></p>
   <ul id="plist"></ul>
@@ -313,24 +314,24 @@ const ROOMS = [
 
 const SERVICE = [
   /* Bedroom 2's own closet — bifold opening north into the room */
-  { poly:[[0,253],[57,253],[57,288],[0,288]],     label:'CL' },
+  { poly:[[0,253],[57,253],[57,288],[0,288]],     label:'CL', store:true },
   /* the two stacked closets against the living wall, opening west
      into the hallway */
-  { poly:[[107,253],[133,253],[133,288],[107,288]], label:'CL' },
-  { poly:[[107,293],[133,293],[133,320],[107,320]], label:'CL' },
+  { poly:[[107,253],[133,253],[133,288],[107,288]], label:'CL', store:true },
+  { poly:[[107,293],[133,293],[133,320],[107,320]], label:'CL', store:true },
   /* hallway: bedroom door at top, bath door on its left, opens to
      the foyer at bottom right */
   { poly:[[67,253],[102,253],[102,353],[67,353]], label:'Hall', sub:"2'11\" wide" },
   /* closet at the hall's foot, door swinging into the foyer */
-  { poly:[[67,353],[102,353],[102,408],[67,408]], label:'CL' },
+  { poly:[[67,353],[102,353],[102,408],[67,408]], label:'CL', store:true },
   { poly:[[0,293],[62,293],[62,408],[0,408]],     label:'Bath', sub:"5'2\" × 9'7\"" },
   /* the primary's second closet — backs onto the foyer beside the
      entry door, but opens EAST into the bedroom */
-  { poly:[[166,424],[211,424],[211,464],[166,464]], label:'CL' },
+  { poly:[[166,424],[211,424],[211,464],[166,464]], label:'CL', store:true },
   /* back-to-back closet block between bedroom 3 and the kitchen:
      north half opens into the bedroom (just right of its door),
      south half opens into the kitchen */
-  { poly:[[302,132],[340,132],[340,168],[302,168]], label:'CL', dy:-4 },
+  { poly:[[302,132],[340,132],[340,168],[302,168]], label:'CL', dy:-4, store:true },
   /* second bath — entered from inside the primary through its west wall */
   { poly:[[337,257],[433,257],[433,345],[337,345]], label:'Bath' },
   /* the mini-hall off the living's bottom-right: kitchen opens on its
@@ -338,7 +339,23 @@ const SERVICE = [
      right (south) */
   { poly:[[302,257],[337,257],[337,295],[302,295]], label:'' },
   /* primary's double closet, doors swinging into the room */
-  { poly:[[211,300],[300,300],[300,330],[211,330]], label:'CL' }
+  { poly:[[211,300],[300,300],[300,330],[211,330]], label:'CL', store:true }
+];
+
+/* Closet interiors you can actually put things in. Kept separate from
+   SERVICE because what gets *drawn* and what can *hold* something are
+   different questions — the back-to-back block draws as one box but is
+   two independent 18"-deep closets. A piece whose centre lands in a bay
+   is measured against that bay, so it reports honestly when it overflows. */
+const BAYS = [
+  { name:'Bed 2 closet',   fit:[0,253,57,288] },
+  { name:'Hall closet',    fit:[107,253,133,288] },
+  { name:'Hall closet 2',  fit:[107,293,133,320] },
+  { name:'Foyer closet',   fit:[67,353,102,408] },
+  { name:'Entry closet',   fit:[166,424,211,464] },
+  { name:'Bed 3 closet',   fit:[302,132,340,150] },
+  { name:'Kitchen closet', fit:[302,150,340,168] },
+  { name:'Primary closet', fit:[211,300,300,330] }
 ];
 
 /* ---- doors: punched gap + leaf + swing arc, traced from the plan.
@@ -708,6 +725,13 @@ function dimension(g){
 /* which room is a piece in, and which rectangle of it */
 function hostRoom(p){
   const [w,d]=dims(p), cx=p.x+w/2, cy=p.y+d/2;
+  /* bays win over rooms — several closets sit inside a room's polygon,
+     and if you've dragged something into one, that's what you meant */
+  for(const b of BAYS){
+    const f=b.fit;
+    if(cx>=f[0]&&cx<=f[2]&&cy>=f[1]&&cy<=f[3])
+      return {room:{name:b.name},fit:f,inside:true,bay:true};
+  }
   for(const r of ROOMS){
     if(!inPoly(cx,cy,r.poly)) continue;
     const fit=r.fits.find(f=>cx>=f[0]&&cx<=f[2]&&cy>=f[1]&&cy<=f[3]) || r.fits[0];
@@ -723,7 +747,7 @@ function hostRoom(p){
 }
 
 /* closets, baths, counters and the chase all count as solid */
-const OBSTACLES = SERVICE.map(s=>{
+const OBSTACLES = SERVICE.filter(s=>!s.store).map(s=>{
   const xs=s.poly.map(p=>p[0]), ys=s.poly.map(p=>p[1]);
   return {label:s.label||'wall',
           box:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]};
@@ -780,8 +804,10 @@ function magnet(p){
 /* first clear spot in a room, searched outward from its centre */
 function findSpot(w,d,fit){
   const [x1,y1,x2,y2]=fit, cx=(x1+x2)/2, cy=(y1+y2)/2;
+  /* auto-placement stays out of closets — you can drag something in
+     deliberately, but nothing should land in one by itself */
   const solids=pieces.filter(p=>!FLAT.has(p.cat)).map(box)
-    .concat(OBSTACLES.map(o=>o.box));
+    .concat(OBSTACLES.map(o=>o.box), BAYS.map(b=>b.fit));
   const cands=[];
   for(let y=y1;y+d<=y2;y+=6) for(let x=x1;x+w<=x2;x+=6) cands.push([x,y]);
   cands.sort((a,b)=>((a[0]+w/2-cx)**2+(a[1]+d/2-cy)**2)-((b[0]+w/2-cx)**2+(b[1]+d/2-cy)**2));
@@ -825,7 +851,11 @@ function report(){
     bits.push(bold('not inside a room',true));
   } else if(tight<0){
     bits.push(document.createTextNode(' — '));
-    bits.push(bold('crosses the wall',true));
+    bits.push(bold(host.bay?`sticks out ${ft(-tight)}, too big for this closet`
+                           :'crosses the wall',true));
+  } else if(host.bay){
+    bits.push(document.createTextNode(' — '));
+    bits.push(bold(`fits, ${ft(tight)} to spare`));
   } else if(tight<WALK){
     bits.push(document.createTextNode(' — '));
     bits.push(bold(`${ft(tight)} gap, tight walkway`));
@@ -1135,6 +1165,47 @@ document.getElementById('cform').addEventListener('submit',e=>{
 });
 
 /* ---------- saved plans ---------- */
+/* ---------- starter layout shipped with the page ----------
+   Seeded into Plans on a first visit so the page opens with a worked
+   example instead of an empty floor. Compact keys keep it small:
+   n=name w=width d=depth c=category r=rotation x/y=position e=pull-out. */
+const PRESETS = [{ name:'Cleo in bedroom 3', pieces:[
+  {"n":"Gray/blue rug","w":96,"d":118,"c":"Rugs","r":1,"x":158,"y":20},
+  {"n":"Leopard rug","w":84,"d":120,"c":"Rugs","r":1,"x":262,"y":380},
+  {"n":"Colorful rug","w":60,"d":96,"c":"Rugs","r":1,"x":325,"y":32},
+  {"n":"Queen bed (Thuma)","w":65,"d":85,"c":"Bedroom","r":0,"x":290,"y":383},
+  {"n":"Side table","w":16,"d":16,"c":"Bedroom","r":0,"x":268,"y":452},
+  {"n":"Side table","w":16,"d":16,"c":"Bedroom","r":0,"x":358,"y":452},
+  {"n":"A's dresser","w":54,"d":15,"c":"Bedroom","r":1,"x":418,"y":368},
+  {"n":"K's dresser","w":30,"d":19,"c":"Bedroom","r":1,"x":211,"y":350},
+  {"n":"Tall locker","w":15,"d":12,"c":"Bedroom","r":1,"x":211,"y":386},
+  {"n":"A's bins","w":37,"d":12,"c":"Bedroom","r":0,"x":215,"y":305},
+  {"n":"Crib","w":54,"d":30,"c":"C's room","r":0,"x":345,"y":97},
+  {"n":"C's dresser","w":59,"d":18,"c":"C's room","r":0,"x":320,"y":0},
+  {"n":"Rocking chair","w":27,"d":34,"c":"C's room","r":0,"x":302,"y":30},
+  {"n":"Standing desk","w":48,"d":30,"c":"Bedroom","r":0,"x":40,"y":0},
+  {"n":"Office chair","w":26,"d":26,"c":"Bedroom","r":0,"x":51,"y":36},
+  {"n":"Trundle couch","w":76,"d":35,"c":"C's room","r":1,"x":98,"y":140,"e":24},
+  {"n":"TV console, light","w":60,"d":16,"c":"Bedroom","r":1,"x":0,"y":148},
+  {"n":"Bin storage","w":37,"d":14,"c":"Bedroom","r":0,"x":8,"y":258},
+  {"n":"Couch","w":86,"d":36,"c":"Living","r":3,"x":138,"y":25},
+  {"n":"Coffee table","w":48,"d":22,"c":"Living","r":1,"x":205,"y":44},
+  {"n":"TV console, dark","w":58,"d":15,"c":"Living","r":1,"x":282,"y":22},
+  {"n":"C's cupboard","w":55,"d":16,"c":"Living","r":0,"x":162,"y":0},
+  {"n":"Coffee station","w":32,"d":14,"c":"Living","r":1,"x":283,"y":190},
+  {"n":"Dining table","w":36,"d":36,"c":"Living","r":0,"x":199,"y":214},
+  {"n":"Dining chair","w":21,"d":17,"c":"Living","r":0,"x":207,"y":193},
+  {"n":"Dining chair","w":21,"d":17,"c":"Living","r":0,"x":207,"y":254},
+  {"n":"Dining chair","w":21,"d":17,"c":"Living","r":1,"x":178,"y":222},
+  {"n":"Dining chair","w":21,"d":17,"c":"Living","r":1,"x":239,"y":222},
+  {"n":"Liquor cabinet","w":36,"d":19,"c":"Living","r":1,"x":138,"y":190},
+  {"n":"Wine fridge","w":10,"d":20,"c":"Living","r":0,"x":138,"y":235},
+  {"n":"Bar stool","w":15,"d":15,"c":"Living","r":0,"x":225,"y":0},
+  {"n":"Bar stool","w":15,"d":15,"c":"Living","r":0,"x":245,"y":0},
+  {"n":"Entry table","w":29,"d":10,"c":"Living","r":1,"x":201,"y":340},
+  {"n":"Mirror, leaning","w":32,"d":5,"c":"Living","r":1,"x":107,"y":350}
+]}];
+
 const PLANS_KEY='layout-plans-v1';
 const pdlg=document.getElementById('pdlg');
 let plans=[], currentPlan=null;
@@ -1143,11 +1214,25 @@ function savePlans(){
   try{ localStorage.setItem(PLANS_KEY,JSON.stringify(plans)); }
   catch(err){ document.getElementById('perr').textContent='Could not save — '+err.name; }
 }
+function starterPlans(){
+  return PRESETS.map((pr,i)=>({
+    id:'starter'+i, name:pr.name, at:Date.now(), uid:pr.pieces.length+1,
+    pieces:pr.pieces.map((q,j)=>{
+      const o={id:j+1,name:q.n,w:q.w,d:q.d,cat:q.c,rot:q.r,x:q.x,y:q.y};
+      if(q.e) o.ext=q.e;
+      return o;
+    })
+  }));
+}
+/* returns true when it seeded, so startup knows to open the starter */
 function loadPlans(){
+  const raw=localStorage.getItem(PLANS_KEY);
+  if(raw===null){ plans=starterPlans(); savePlans(); return true; }
   try{
-    const j=JSON.parse(localStorage.getItem(PLANS_KEY)||'null');
+    const j=JSON.parse(raw);
     if(Array.isArray(j)) plans=j.filter(p=>p&&p.id&&Array.isArray(p.pieces));
   }catch(err){}
+  return false;
 }
 function planLabel(){
   const el2=document.getElementById('planname');
@@ -1242,6 +1327,14 @@ document.getElementById('pnew').onclick=()=>{
   savePlans(); renderPlans(); planLabel();
 };
 
+document.getElementById('pseed').onclick=()=>{
+  const fresh=starterPlans().filter(s=>!plans.some(p=>p.name===s.name));
+  const err=document.getElementById('perr');
+  if(!fresh.length){ err.textContent='Starter layout is already in the list.'; return; }
+  fresh.forEach(s=>{ s.id='starter'+Date.now().toString(36)+plans.length; plans.push(s); });
+  err.textContent=''; savePlans(); renderPlans();
+};
+
 document.getElementById('pupd').onclick=()=>{
   const p=plans.find(q=>q.id===currentPlan);
   const err=document.getElementById('perr');
@@ -1286,8 +1379,13 @@ function load(){
 }
 
 loadCustom();
-loadPlans();
+const seeded=loadPlans();
 load();
+if(seeded && !pieces.length && plans.length){
+  const st=plans[0];
+  pieces=JSON.parse(JSON.stringify(st.pieces));
+  uid=st.uid; currentPlan=st.id; save();
+}
 planLabel();
 paint();
 refresh();
