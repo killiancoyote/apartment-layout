@@ -212,6 +212,7 @@ dialog input:invalid{border-color:var(--red)}
     <button class="ghost on" id="gridbtn" aria-pressed="true">Grid</button>
     <button class="ghost" id="custom">Custom…</button>
     <button class="ghost" id="plans">Plans…</button>
+    <button class="ghost" id="share">Share…</button>
     <button class="ghost" id="clear">Clear all</button>
   </div>
   <p id="readout" aria-live="polite"></p>
@@ -239,6 +240,18 @@ dialog input:invalid{border-color:var(--red)}
       <button class="pen" id="ca" type="submit">Add</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="sdlg" aria-labelledby="sdlgh">
+  <h2 id="sdlgh">Share this layout</h2>
+  <p class="hint" id="shint">Anyone opening this link sees exactly this arrangement.</p>
+  <label for="surl">Link</label>
+  <input id="surl" type="text" readonly>
+  <p id="sinfo" class="hint"></p>
+  <div class="row" style="margin-top:14px;justify-content:flex-end">
+    <button class="ghost" id="sx" type="button">Close</button>
+    <button class="pen" id="scopy" type="button">Copy</button>
+  </div>
 </dialog>
 
 <dialog id="pdlg" aria-labelledby="pdlgh">
@@ -1276,6 +1289,7 @@ function renderPlans(){
         const t=n.trim(); if(!t) return;
         p.name=t.slice(0,60); savePlans(); renderPlans(); planLabel();
       }),
+      mk('Link',()=>{ pdlg.close(); openShare(p.name,p.pieces); }),
       mk('Duplicate',()=>{
         plans.push({id:'p'+Date.now().toString(36),name:(p.name+' copy').slice(0,60),
                     pieces:JSON.parse(JSON.stringify(p.pieces)),uid:p.uid,at:Date.now()});
@@ -1347,6 +1361,138 @@ document.getElementById('pupd').onclick=()=>{
   savePlans(); renderPlans(); planLabel();
 };
 
+/* ---------- share links ----------
+   There's no server behind a static page, so a layout travels inside the
+   URL itself. Names and categories are de-duplicated into a dictionary
+   and each piece becomes a short numeric row, which keeps a 34-piece
+   layout well inside a textable URL. Version tag lets old links keep
+   working if the schema changes. */
+const sdlg=document.getElementById('sdlg');
+
+const b64e=str=>{
+  const bytes=new TextEncoder().encode(str);
+  let bin=''; bytes.forEach(b=>bin+=String.fromCharCode(b));
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+};
+const b64d=s=>{
+  const b=atob(s.replace(/-/g,'+').replace(/_/g,'/'));
+  return new TextDecoder().decode(Uint8Array.from(b,c=>c.charCodeAt(0)));
+};
+
+const b64bytes=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+const bytesB64=u=>{
+  let bin=''; u.forEach(b=>bin+=String.fromCharCode(b));
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+};
+
+function planPayload(name,list){
+  const dict=[];
+  const D=v=>{const i=dict.indexOf(v); return i<0?(dict.push(v)-1):i;};
+  const rows=list.map(p=>{
+    const r=[D(p.name),p.w,p.d,D(p.cat),p.rot|0,Math.round(p.x),Math.round(p.y)];
+    if(p.ext) r.push(p.ext);
+    return r;
+  });
+  return JSON.stringify([1,name||'Shared layout',dict,rows]);
+}
+function parsePayload(json){
+  const j=JSON.parse(json);
+  if(!Array.isArray(j)||j[0]!==1) throw new Error('unrecognised link format');
+  const [,name,dict,rows]=j;
+  if(!Array.isArray(dict)||!Array.isArray(rows)) throw new Error('malformed link');
+  return {name:String(name).slice(0,60), pieces:rows.map((r,i)=>{
+    const o={id:i+1,name:String(dict[r[0]]??'Piece'),w:+r[1],d:+r[2],
+             cat:String(dict[r[3]]??'Custom'),rot:(+r[4]||0)%4,x:+r[5],y:+r[6]};
+    if(r[7]) o.ext=+r[7];
+    return o;
+  }).filter(p=>p.w>0&&p.d>0&&Number.isFinite(p.x)&&Number.isFinite(p.y))};
+}
+
+/* gzip shrinks a 34-piece layout from ~1750 URL characters to under 700.
+   'z=' is compressed, 'p=' is plain base64 — plain is both the fallback
+   when CompressionStream is missing and a format older links may use. */
+async function encodeShare(name,list){
+  const json=planPayload(name,list);
+  if(typeof CompressionStream!=='undefined'){
+    try{
+      const cs=new CompressionStream('gzip');
+      const w=cs.writable.getWriter();
+      w.write(new TextEncoder().encode(json)); w.close();
+      return 'z='+bytesB64(new Uint8Array(await new Response(cs.readable).arrayBuffer()));
+    }catch(err){ /* fall through to plain */ }
+  }
+  return 'p='+b64e(json);
+}
+async function decodeShare(frag){
+  const m=/^([pz])=(.+)$/.exec(frag);
+  if(!m) throw new Error('unrecognised link');
+  if(m[1]==='p') return parsePayload(b64d(m[2]));
+  if(typeof DecompressionStream==='undefined')
+    throw new Error('this browser cannot read compressed links');
+  const ds=new DecompressionStream('gzip');
+  const w=ds.writable.getWriter(); w.write(b64bytes(m[2])); w.close();
+  return parsePayload(new TextDecoder().decode(
+    await new Response(ds.readable).arrayBuffer()));
+}
+
+async function shareURL(name,list){
+  return location.href.split('#')[0]+'#'+await encodeShare(name,list);
+}
+
+async function openShare(name,list){
+  if(!list.length){
+    out.replaceChildren(bold('Nothing on the plan to share.',true));
+    return;
+  }
+  const field=document.getElementById('surl');
+  const info=document.getElementById('sinfo');
+  field.value=''; info.textContent='Building link…';
+  sdlg.showModal();
+  const url=await shareURL(name,list);
+  field.value=url;
+  info.textContent=`${list.length} pieces · ${url.length} characters`;
+  field.focus(); field.select();
+  copyToClipboard(url,info);
+}
+
+async function copyToClipboard(text,info){
+  try{
+    await navigator.clipboard.writeText(text);
+    info.textContent='Copied to the clipboard.';
+  }catch(err){
+    info.textContent='Select the link above and copy it.';   // file:// blocks the API
+  }
+}
+
+document.getElementById('share').onclick=()=>{
+  const p=plans.find(q=>q.id===currentPlan);
+  openShare(p?p.name:'Shared layout', pieces);
+};
+document.getElementById('sx').onclick=()=>sdlg.close();
+document.getElementById('scopy').onclick=()=>
+  copyToClipboard(document.getElementById('surl').value,document.getElementById('sinfo'));
+
+/* a layout arriving by link replaces the canvas but never the saved
+   plans, and Undo still reaches whatever was there before */
+async function loadFromHash(){
+  const frag=(location.hash||'').replace(/^#/,'');
+  if(!/^[pz]=/.test(frag)) return false;
+  const say=(txt,warn)=>out.replaceChildren(bold(txt,warn));
+  let shared;
+  try{ shared=await decodeShare(frag); }
+  catch(err){ say('That share link could not be read — '+err.message,true); return false; }
+  if(!shared.pieces.length){ say('That share link had no furniture in it.',true); return false; }
+  if(pieces.length) snapshot();          // Undo still reaches what was here
+  pieces=shared.pieces;
+  pieces.forEach(clampPiece);
+  uid=pieces.length+1;
+  currentPlan=null; sel=null;
+  draw();
+  document.getElementById('planname').textContent='· '+shared.name+' (from a link)';
+  say('Opened from a shared link. Use Plans → Save as new to keep it.');
+  return true;
+}
+
 /* ---------- persistence ---------- */
 const KEY='layout-state-v3';
 let saveTimer=0;
@@ -1390,6 +1536,8 @@ planLabel();
 paint();
 refresh();
 viewport.scrollTop=0;
+/* decoding a link is async, so it lands just after the normal state */
+loadFromHash();
 </script>
 </body>
 </html>
