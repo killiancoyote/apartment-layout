@@ -188,6 +188,31 @@ dialog input{
 }
 dialog input:invalid{border-color:var(--red)}
 #err{color:var(--red);font-size:10px;font-family:var(--mono);min-height:12px;margin:8px 0 0}
+/* buttons carry a full label and a compact one; the compact one is for
+   narrow screens, and aria-label keeps the accessible name stable */
+.i{display:none}
+
+@media (max-width:560px){
+  /* Apple's 44px minimum — every control was 32px and the zoom keys 29px wide */
+  button{min-height:44px;padding:9px 13px;font-size:12px}
+  .t{display:none}
+  .i{display:inline}
+  /* icon-only labels collapse narrower than the 44px touch minimum */
+  #zout,#zin{min-width:48px;font-size:17px;line-height:1}
+  #rot,#del,#undo{min-width:48px;font-size:16px;line-height:1}
+  /* one scrollable row instead of two stacked ones, saving ~50px of height */
+  #bar>.row{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    padding-bottom:3px;scrollbar-width:none}
+  #bar>.row::-webkit-scrollbar{display:none}
+  #bar>.row>button{flex:none}
+  #bar{padding:6px 8px calc(8px + env(safe-area-inset-bottom))}
+  #readout{font-size:11px;margin-top:6px;min-height:24px}
+  #cats{margin-top:7px}
+  #cats button{min-height:38px;font-size:10.5px}
+  #items button{min-height:52px;font-size:12px;padding:7px 11px}
+  #items button span{font-size:10px}
+  header{padding:8px 12px 7px}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -203,17 +228,25 @@ dialog input:invalid{border-color:var(--red)}
 
 <div id="bar">
   <div class="row">
-    <button id="rot" class="pen" disabled>Rotate 90°</button>
-    <button id="del" disabled>Remove</button>
-    <button id="undo" class="ghost" disabled>Undo</button>
+    <button id="rot" class="pen" disabled aria-label="Rotate 90 degrees"
+      ><span class="t">Rotate 90°</span><span class="i" aria-hidden="true">⟳</span></button>
+    <button id="del" disabled aria-label="Remove selected piece"
+      ><span class="t">Remove</span><span class="i" aria-hidden="true">✕</span></button>
+    <button id="undo" class="ghost" disabled aria-label="Undo"
+      ><span class="t">Undo</span><span class="i" aria-hidden="true">↶</span></button>
     <button class="ghost" id="zout" aria-label="Zoom out">−</button>
     <button class="ghost" id="zin" aria-label="Zoom in">+</button>
-    <button class="ghost" id="zfit">Fit</button>
-    <button class="ghost on" id="gridbtn" aria-pressed="true">Grid</button>
-    <button class="ghost" id="custom">Custom…</button>
-    <button class="ghost" id="plans">Plans…</button>
-    <button class="ghost" id="share">Share…</button>
-    <button class="ghost" id="clear">Clear all</button>
+    <button class="ghost" id="zfit" aria-label="Fit plan to screen">Fit</button>
+    <button class="ghost on" id="gridbtn" aria-pressed="true" aria-label="Toggle the foot grid"
+      ><span class="t">Grid</span><span class="i" aria-hidden="true">Grid</span></button>
+    <button class="ghost" id="custom" aria-label="Add a custom piece"
+      ><span class="t">Custom…</span><span class="i" aria-hidden="true">Custom</span></button>
+    <button class="ghost" id="plans" aria-label="Saved plans"
+      ><span class="t">Plans…</span><span class="i" aria-hidden="true">Plans</span></button>
+    <button class="ghost" id="share" aria-label="Share a link to this layout"
+      ><span class="t">Share…</span><span class="i" aria-hidden="true">Share</span></button>
+    <button class="ghost" id="clear" aria-label="Clear all pieces"
+      ><span class="t">Clear all</span><span class="i" aria-hidden="true">Clear</span></button>
   </div>
   <p id="readout" aria-live="polite"></p>
   <div id="cats" role="tablist" aria-label="Furniture categories"></div>
@@ -477,7 +510,7 @@ const svg=document.getElementById('plan');
 const viewport=document.getElementById('viewport');
 const out=document.getElementById('readout');
 
-let zoom=1.55, pieces=[], sel=null, uid=1, showGrid=true;
+let zoom=1.55, pieces=[], sel=null, uid=1, showGrid=true, zoomRestored=false;
 let history=[], drag=null, raf=0;
 
 /* ---------- helpers ---------- */
@@ -1059,10 +1092,8 @@ function setZoom(next){
   viewport.scrollTop=cy*k-viewport.clientHeight/2;
   save();
 }
-function fitToScreen(){
-  const avail=viewport.clientWidth-36;
-  setZoom(avail/((W+PAD*2)*0.9));
-}
+const fitZoom=()=>(viewport.clientWidth-36)/((W+PAD*2)*0.9);
+function fitToScreen(){ setZoom(fitZoom()); }
 
 /* ---------- buttons ---------- */
 document.getElementById('rot').onclick=()=>{
@@ -1515,7 +1546,7 @@ function load(){
     pieces.forEach(p=>{ p.rot = (p.rot===true?1:(+p.rot||0))%4; });
     pieces.forEach(clampPiece);
     uid=Math.max(1,...pieces.map(p=>(+p.id||0)+1));
-    if(Number.isFinite(j.zoom)) zoom=clamp(j.zoom,0.5,4);
+    if(Number.isFinite(j.zoom)){ zoom=clamp(j.zoom,0.5,4); zoomRestored=true; }
     if(typeof j.showGrid==='boolean') showGrid=j.showGrid;
     if(j.currentPlan) currentPlan=j.currentPlan;
   }
@@ -1532,6 +1563,10 @@ if(seeded && !pieces.length && plans.length){
   pieces=JSON.parse(JSON.stringify(st.pieces));
   uid=st.uid; currentPlan=st.id; save();
 }
+/* First run on a phone used to open at 1.55, which is 677px of plan on a
+   375px screen. Shrink to fit when nothing was saved, but never zoom past
+   the desktop default on a wide monitor. */
+if(!zoomRestored) zoom=clamp(Math.min(1.55,fitZoom()),0.4,4);
 planLabel();
 paint();
 refresh();
